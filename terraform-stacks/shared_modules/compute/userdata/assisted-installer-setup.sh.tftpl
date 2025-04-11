@@ -1,0 +1,11 @@
+#!/bin/bash
+
+cat << EOF > /etc/agent.env
+PULL_SECRET_TOKEN=${openshift_pullsecret_token}
+INFRAENV_ID=${openshift_infraenv}
+EOF
+
+mkdir /root/.docker
+cat << EOF > /root/.docker/config.json
+${openshift_pullsecret}
+EOF

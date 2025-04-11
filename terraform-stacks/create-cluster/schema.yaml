@@ -16,6 +16,9 @@ variableGroups:
   - cluster_name
   - installation_method
   - create_openshift_instances
+  - openshift_infraenv
+  - openshift_pullsecret
+  - openshift_pullsecret_token
 
 - title: "Control Plane Node Configuration"
   variables:
@@ -110,6 +113,30 @@ variables:
     description: Select the checkbox to enable the creation of OpenShift image and instances.
     default: true
     required: true
+
+  openshift_infraenv:
+    type: string
+    title: Openshift InfraEnv ID
+    description: This is the InfraEnv ID assigned to the Openshift cluster on the Assisted Installer platform.
+    default: ""
+    required: true
+    visible: create_openshift_instances
+
+  openshift_pullsecret:
+    type: string
+    title: Openshift pull secret
+    description: JSON configuration for logging to container images registries.
+    default: ""
+    required: true
+    visible: create_openshift_instances
+
+  openshift_pullsecret_token:
+    type: string
+    title: Openshift pull secret token
+    description: Assisted Installer agent authentication token.
+    default: ""
+    required: true
+    visible: create_openshift_instances
 
   openshift_image_source_uri:
     type: string

@@ -130,6 +130,10 @@ module "compute" {
   is_compute_iscsi_type       = local.is_compute_iscsi_type
   create_openshift_instances  = var.create_openshift_instances
 
+  openshift_infraenv         = var.openshift_infraenv
+  openshift_pullsecret       = var.openshift_pullsecret
+  openshift_pullsecret_token = var.openshift_pullsecret_token
+
   rendezvous_ip       = var.rendezvous_ip
   installation_method = var.installation_method
 

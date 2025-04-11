@@ -48,7 +48,13 @@ resource "oci_core_instance" "control_plane_node" {
 
   metadata = var.is_control_plane_iscsi_type || var.is_compute_iscsi_type ? {
     user_data = base64encode(file("./shared_modules/compute/userdata/iscsi-oci-configure-secondary-nic.sh"))
-  } : null
+  } : {
+    user_data = base64encode(templatefile("./shared_modules/compute/userdata/assisted-installer-setup.sh.tftpl", {
+      openshift_infraenv         = var.openshift_infraenv
+      openshift_pullsecret       = var.openshift_pullsecret
+      openshift_pullsecret_token = var.openshift_pullsecret_token
+    }))
+  }
 }
 
 # compute nodes
@@ -91,5 +97,11 @@ resource "oci_core_instance" "compute_node" {
 
   metadata = var.is_compute_iscsi_type ? {
     user_data = base64encode(file("./shared_modules/compute/userdata/iscsi-oci-configure-secondary-nic.sh"))
-  } : null
+   } : {
+    user_data = base64encode(templatefile("./shared_modules/compute/userdata/assisted-installer-setup.sh.tftpl", {
+      openshift_infraenv         = var.openshift_infraenv
+      openshift_pullsecret       = var.openshift_pullsecret
+      openshift_pullsecret_token = var.openshift_pullsecret_token
+    }))
+  }
 }

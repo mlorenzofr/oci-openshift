@@ -46,6 +46,18 @@ variable "cluster_name" {
   type = string
 }
 
+variable "openshift_infraenv" {
+  type = string
+}
+
+variable "openshift_pullsecret" {
+  type = string
+}
+
+variable "openshift_pullsecret_token" {
+  type = string
+}
+
 variable "op_openshift_tag_boot_volume_type" {
   type = string
 }

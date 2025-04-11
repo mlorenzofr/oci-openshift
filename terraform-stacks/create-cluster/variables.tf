@@ -154,6 +154,23 @@ variable "cluster_name" {
   description = "The name of your OpenShift cluster. It should be the same as what was specified when creating the OpenShift ISO and it should be DNS compatible. The cluster_name value must be 1-54 characters. It can use lowercase alphanumeric characters or hyphen (-), but must start and end with a lowercase letter or a number."
 }
 
+## Openshift custom variables
+variable "openshift_infraenv" {
+  type        = string
+  description = "This is the InfraEnv ID assigned to the Openshift cluster on the Assisted Installer platform."
+}
+
+variable "openshift_pullsecret" {
+  type        = string
+  description = "JSON configuration for logging to container images registries."
+}
+
+variable "openshift_pullsecret_token" {
+  type        = string
+  description = "Assisted Installer agent authentication token."
+}
+##
+
 variable "vcn_cidr" {
   default     = "10.0.0.0/16"
   type        = string
