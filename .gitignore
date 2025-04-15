@@ -17,3 +17,6 @@ dist/
 **/.terraform/*
 **/.terrafor*
 .terraform.lock.hcl
+
+# personal data (it's not top secret, anyway)
+ignition/debug.ign
