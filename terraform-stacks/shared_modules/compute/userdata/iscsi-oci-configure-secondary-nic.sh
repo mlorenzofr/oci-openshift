@@ -60,6 +60,88 @@ function set_oci_dns {
   fi
 }
 
+# Convert the primary interface from DHCP to static configuration
+# This prevents losing network connectivity during ostree switch-root
+# Uses a zero-downtime approach by modifying the connection without bringing it down
+function convert_primary_to_static {
+  local if_name="$1"
+  local ip_address gateway subnet_size mtu conn_name conn_uuid current_method
+
+  echo "Converting primary interface ${if_name} from DHCP to static configuration"
+
+  # Get current IP address and prefix length
+  ip_address=$(ip -json addr show dev "${if_name}" | jq -r '.[0].addr_info[] | select(.family=="inet") | .local')
+  subnet_size=$(ip -json addr show dev "${if_name}" | jq -r '.[0].addr_info[] | select(.family=="inet") | .prefixlen')
+
+  # Get default gateway
+  gateway=$(ip -json route show default | jq -r --arg dev "${if_name}" '.[] | select(.dev==$dev) | .gateway')
+
+  # Get current MTU
+  mtu=$(ip -json link show dev "${if_name}" | jq -r '.[0].mtu')
+
+  if [[ -z "${ip_address}" || -z "${subnet_size}" || -z "${gateway}" ]]; then
+    echo "ERROR: Failed to retrieve network configuration from ${if_name}"
+    echo "IP: ${ip_address}, Subnet: ${subnet_size}, Gateway: ${gateway}"
+    return 1
+  fi
+
+  echo "Captured configuration - IP: ${ip_address}/${subnet_size}, Gateway: ${gateway}, MTU: ${mtu}"
+
+  # Find the active connection UUID for this interface
+  conn_uuid=$(nmcli -t -f DEVICE,UUID connection show --active | grep "^${if_name}:" | cut -d: -f2)
+
+  if [[ -n "${conn_uuid}" ]]; then
+    # Get the connection name
+    conn_name=$(nmcli -t -f UUID,NAME connection show | grep "^${conn_uuid}:" | cut -d: -f2)
+    current_method=$(nmcli -t -f ipv4.method connection show "${conn_uuid}" | cut -d: -f2)
+
+    echo "Found active connection: ${conn_name} (${conn_uuid}), method: ${current_method}"
+
+    # Check if already configured as static
+    if [[ "${current_method}" == "manual" ]]; then
+      echo "Primary interface ${if_name} is already configured with static IP"
+      return 0
+    fi
+
+    # Modify the existing connection in-place (zero downtime)
+    echo "Modifying connection ${conn_name} to static configuration (zero downtime)"
+    nmcli connection modify "${conn_uuid}" ipv4.method manual
+    nmcli connection modify "${conn_uuid}" ipv4.addresses "${ip_address}/${subnet_size}"
+    nmcli connection modify "${conn_uuid}" ipv4.gateway "${gateway}"
+    nmcli connection modify "${conn_uuid}" ipv4.dns "169.254.169.254"
+    nmcli connection modify "${conn_uuid}" ipv4.ignore-auto-dns no
+    nmcli connection modify "${conn_uuid}" ethernet.mtu "${mtu}"
+    nmcli connection modify "${conn_uuid}" ipv4.route-metric 100
+    nmcli connection modify "${conn_uuid}" connection.autoconnect true
+
+    # Reapply the connection without bringing the interface down
+    # This applies the new settings while maintaining connectivity
+    nmcli device reapply "${if_name}"
+
+    echo "Primary interface ${if_name} successfully converted to static configuration (no downtime)"
+  else
+    # No active connection found, create a new one
+    # This path should rarely execute in a running system
+    echo "No active connection found, creating new static connection"
+
+    nmcli connection add con-name "${if_name}" ifname "${if_name}" type ethernet \
+      ip4 "${ip_address}/${subnet_size}" gw4 "${gateway}"
+
+    nmcli connection modify "${if_name}" ipv4.dns "169.254.169.254"
+    nmcli connection modify "${if_name}" ipv4.ignore-auto-dns no
+    nmcli connection modify "${if_name}" ethernet.mtu "${mtu}"
+    nmcli connection modify "${if_name}" connection.autoconnect true
+    nmcli connection modify "${if_name}" ipv4.route-metric 100
+
+    # Bring up the new connection
+    nmcli connection up "${if_name}"
+
+    echo "Primary interface ${if_name} configured with new static connection"
+  fi
+
+  return 0
+}
+
 # /opc/v2/vnics endpoint returns something that will look like the following
 # structure:
 # [
@@ -83,11 +165,24 @@ function set_oci_dns {
 #   }
 # ]
 
-#Fetch the VNICS data
+# Fetch the VNICS data
 vnics=$(curl --silent -H "Authorization: Bearer Oracle" -L http://169.254.169.254/opc/v2/vnics/)
+
+# Get primary interface information
+primary_if_name=$(get_primary_if_name)
+echo "Primary interface: ${primary_if_name}"
+
+# Convert primary interface from DHCP to static to survive ostree switch-root
+if [[ -n "${primary_if_name}" ]]; then
+  convert_primary_to_static "${primary_if_name}"
+else
+  echo "WARNING: Could not determine primary interface name"
+fi
+
+# Get secondary interface information
 secondary_if_mac_address=$(jq -r '.[1].macAddr' <<< "${vnics}")
 secondary_if_ip_address=$(jq -r '.[1].privateIp' <<< "${vnics}")
-secondary_if_vlan_tag=$(jq -r '.[1].vlanTag' <<< "${vnics}") # Corrected to get VLAN_ID directly
+secondary_if_vlan_tag=$(jq -r '.[1].vlanTag' <<< "${vnics}")
 secondary_if_default_gateway=$(jq -r '.[1].virtualRouterIp' <<< "${vnics}")
 secondary_if_subnet=$(jq -r '.[1].subnetCidrBlock' <<< "${vnics}")
 secondary_if_subnet_size=$(cut -f 2 -d '/' <<< "${secondary_if_subnet}")
